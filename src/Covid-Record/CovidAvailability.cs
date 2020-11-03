@@ -25,12 +25,19 @@ namespace Covid_Record
             return sessionId;
         }
 
-        public bool IsAvailable(string session, int? patient)
+        public int? GetPatient(string session)
+        {
+            var content = "{\"auth\":{\"session_id\":\"" + session + "\"}}";
+            var patientResponse = Post("https://emp.mos.ru/v1.1/patient/get?token=887033d0649e62a84f80433e823526a1", content);
+            var data = JsonConvert.DeserializeObject<PatientResponse>(patientResponse);
+            return data?.result?.FirstOrDefault()?.id;
+        }
+
+        public bool IsAvailable(string session, int patientId)
         {
             //2010 - covid
             //2004 - Пост - для теста
             var specialityCode = "2010";
-            var patientId = patient.Value;
             var json =
                 "{ \"patient_id\":\"" + patientId + "\",\"speciality_code\":\"" + specialityCode + "\",\"auth\":{ \"session_id\":\"" + session + "\"} }";
 
@@ -68,7 +75,6 @@ namespace Covid_Record
             httpRequest.Method = "POST";
             httpRequest.CookieContainer = new CookieContainer();
             httpRequest.Headers.Add("User-Agent", "okhttp/4.2.2");
-            //httpRequest.CookieContainer.Add(new Cookie { Name = "WILDAUTHNEW_V3", Value = session, Domain = "wildberries.ru" });
 
             using (var streamWriter = new StreamWriter(httpRequest.GetRequestStream()))
             {
@@ -81,14 +87,6 @@ namespace Covid_Record
                 var result = streamReader.ReadToEnd();
                 return result;
             }
-        }
-
-        public int? GetPatient(string session)
-        {
-            var content = "{\"auth\":{\"session_id\":\"" + session + "\"}}";
-            var patientResponse = Post("https://emp.mos.ru/v1.1/patient/get?token=887033d0649e62a84f80433e823526a1", content);
-            var data = JsonConvert.DeserializeObject<PatientResponse>(patientResponse);
-            return data?.result.First().id;
         }
     }
 }

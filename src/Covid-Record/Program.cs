@@ -25,7 +25,7 @@ namespace Covid_Record
 
             while (true)
             {
-                arr.IsAvailable(session, patient);
+                arr.IsAvailable(session, patient.Value);
                 Thread.Sleep(TimeSpan.FromSeconds(4));
             }
         }

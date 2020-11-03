@@ -1,13 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using Telegram.Bot;
 
 namespace Covid_Record
 {
     public class TelegramBot
     {
-        private TelegramBotClient _telegram;
+        private readonly TelegramBotClient _telegram;
         public string Token => "1479535614:AAFqHdsUFikzOti0zknK_pN2sEONNAXecPY";
         public long MainChatId;
 
