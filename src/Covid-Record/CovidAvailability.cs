@@ -18,6 +18,7 @@ namespace Covid_Record
         //2011 - Вакцинация
         //2004 - Пост - для теста
         const string specialityCode = "2009"; //"2009";
+        private readonly DateTime _bestRecordDate = DateTime.Now.Date.AddDays(1).AddHours(18).AddMinutes(50);
         private readonly TelegramBot _telegram;
         private Record _currentRecord;
 
@@ -43,7 +44,7 @@ namespace Covid_Record
             return data?.result?.FirstOrDefault()?.id;
         }
 
-        public void GetCurrentAppointments(int patientId, string session)
+        public void UpdateAppointments(int patientId, string session)
         {
             _currentRecord = GetAppointments(patientId, session, specialityCode)?.FirstOrDefault();
         }
@@ -72,9 +73,12 @@ namespace Covid_Record
                         sb.AppendLine($"- {doctorsInfo.availability_date}: {doctorsInfo.last_name} {doctorsInfo.first_name} {doctorsInfo.second_name}");
                     }
                 }
+                Console.WriteLine(sb.ToString());
+                _telegram.SendMessage(sb.ToString());
 
                 var enableAppointmentAutoCreation = true;
-                var nearestDate = responseJson.result.clinics.FirstOrDefault()?.doctors_info?.FirstOrDefault();
+                var nearestDate = responseJson.result.clinics.SelectMany(f=>f.doctors_info)
+                    .OrderBy(f=> Math.Abs((DateTime.Parse(f.availability_date)-_bestRecordDate).TotalMinutes)).FirstOrDefault();
                 // ReSharper disable once ConditionIsAlwaysTrueOrFalse
                 if (enableAppointmentAutoCreation && nearestDate != null)
                 {
@@ -101,19 +105,34 @@ namespace Covid_Record
                         specialityCode = specialityCode,
                         specialityName = "",
                         startTime = DateTime.Parse(nearestDate.availability_date).ToString("dd.MM.yyyy HH:mm"),
-                        endTime = DateTime.Parse(nearestDate.availability_date).AddMinutes(5).ToString("dd.MM.yyyy HH:mm"),
+                        endTime = DateTime.Parse(nearestDate.availability_date).AddMinutes(10).ToString("dd.MM.yyyy HH:mm"),
                         ticket = _currentRecord?.ticket
                     };
 
                     string responseCreateAppointmentJson;
-                    if (!string.IsNullOrEmpty(createAppointment.ticket))
+                    if (_currentRecord != null)
                     {
-                        if (DateTime.Parse(_currentRecord?.dateBegin ?? "") > DateTime.Parse(nearestDate.availability_date))
+                        var currentDiff = Math.Abs((DateTime.Parse(_currentRecord.dateBegin) - _bestRecordDate).TotalMinutes);
+                        var newDiff = Math.Abs((DateTime.Parse(nearestDate.availability_date) - _bestRecordDate).TotalMinutes);
+
+                        if (newDiff < currentDiff)
                         {
-                            responseCreateAppointmentJson = Post(
-                                "https://emp.mos.ru/v1.1/doctor/shiftAppointment?token=887033d0649e62a84f80433e823526a1",
-                                JsonConvert.SerializeObject(createAppointment));
-                            GetCurrentAppointments(patientId, session);
+                            if (_currentRecord.clinic == nearestDate.clinic)
+                            {
+                                responseCreateAppointmentJson = Post(
+                                    "https://emp.mos.ru/v1.1/doctor/shiftAppointment?token=887033d0649e62a84f80433e823526a1",
+                                    JsonConvert.SerializeObject(createAppointment));
+                                UpdateAppointments(patientId, session);
+                                var responseJs = JsonConvert.DeserializeObject<BaseResponse>(responseCreateAppointmentJson);
+                                _telegram.SendMessage($"Перезаписываю Вас на {nearestDate.availability_date} ({newDiff}<{currentDiff}): \r\n - {responseJs.errorCode}:{responseJs.errorMessage}.");
+                            }
+                            else
+                            {
+                                _telegram.SendMessage($"Клиника в записи отличается от изначально выбранной ({_currentRecord.clinic}!={nearestDate.clinic}). Ничего не делаю.");
+                            }
+                        }
+                        else {
+                            _telegram.SendMessage($"Вы уже имеете запись на {_currentRecord?.dateBegin}, предлагаемая {nearestDate.availability_date} менее удобна. ({newDiff}>{currentDiff}), пропускаю.");
                         }
                     }
                     else
@@ -121,12 +140,9 @@ namespace Covid_Record
                         responseCreateAppointmentJson = Post(
                             "https://emp.mos.ru/v1.1/doctor/createAppointment?token=887033d0649e62a84f80433e823526a1",
                             JsonConvert.SerializeObject(createAppointment));
-                        GetCurrentAppointments(patientId, session);
+                        UpdateAppointments(patientId, session);
                     }
                 }
-
-                Console.WriteLine(sb.ToString());
-                _telegram.SendMessage(sb.ToString());
             }
 
             return true;
@@ -140,7 +156,7 @@ namespace Covid_Record
             var response = Post("https://emp.mos.ru/v1.1/doctor/getList?token=887033d0649e62a84f80433e823526a1", json);
             var responseDecoded = JsonConvert.DeserializeObject<RecordListResponse>(response);
 
-            var records = responseDecoded.result.records;
+            var records = responseDecoded?.result?.records ?? new List<Record>();
             if (!string.IsNullOrEmpty(specialityCode))
             {
                 records = records.Where(f => f.doctor.speciality_code == specialityCode).ToList();

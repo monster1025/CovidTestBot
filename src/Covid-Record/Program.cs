@@ -10,24 +10,28 @@ namespace Covid_Record
             var telegram = new TelegramBot();
             var arr = new CovidAvailability(telegram);
 
-            var phone = "7xxxxxxx";
-            var password = "xxxx";
+            var phone = "7916xxxxx";
+            var password = "xxxxx";
+            int? patientId = null;
 
             var session = arr.GetSession(phone, password);
+            // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+            if (patientId == null)
+            {
+                patientId = arr.GetPatient(session);
+            }
 
-            var patient = arr.GetPatient(session);
-            if (patient == null)
+            if (patientId == null)
             {
                 Console.WriteLine("Не могу получить ID пациента.");
                 Console.ReadLine();
                 return;
             }
 
-            arr.GetCurrentAppointments(patient ?? -1, session);
-
+            arr.UpdateAppointments(patientId.Value, session);
             while (true)
             {
-                arr.IsAvailable(session, patient.Value);
+                arr.IsAvailable(session, patientId.Value);
                 Thread.Sleep(TimeSpan.FromSeconds(4));
             }
         }
