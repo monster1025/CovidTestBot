@@ -10,8 +10,8 @@ namespace Covid_Record
             var telegram = new TelegramBot();
             var arr = new CovidAvailability(telegram);
 
-            var phone = "79160000000";
-            var password = "testpwd";
+            var phone = "7xxxxxxx";
+            var password = "xxxx";
 
             var session = arr.GetSession(phone, password);
 
@@ -22,6 +22,8 @@ namespace Covid_Record
                 Console.ReadLine();
                 return;
             }
+
+            arr.GetCurrentAppointments(patient ?? -1, session);
 
             while (true)
             {
